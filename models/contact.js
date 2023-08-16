@@ -19,6 +19,10 @@ const contactSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    owner: {
+      type: Schema.Types.ObjectId,
+      ref: "user",
+    },
   },
   { versionKey: false, timestamps: true }
 );
@@ -52,6 +56,11 @@ const contactAddSchema = Joi.object({
         "Phone number must be a valid phone number for region UA, digits and can contain spaces, dashes, parentheses and can start with +",
     }),
   favorite: Joi.boolean(),
+  owner: {
+    type: Schema.Types.ObjectId,
+    ref: "user",
+    required: true,
+  },
 });
 
 const updateFavoriteSchemas = Joi.object({
