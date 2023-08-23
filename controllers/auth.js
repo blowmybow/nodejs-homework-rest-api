@@ -1,10 +1,15 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const gravatar = require("gravatar");
+const path = require("path");
+const fs = require("fs/promises");
+const Jimp = require("jimp");
 
-const { User } = require("../models/users");
-const { SECRET_KEY } = process.env;
-
+const { User } = require("../models/user");
 const { ctrlWrapper, HttpError } = require("../helpers");
+
+const avatarDir = path.resolve("public", "avatars");
+const { SECRET_KEY } = process.env;
 
 const register = async (req, res) => {
   const { email, password, subscription } = req.body;
@@ -16,20 +21,22 @@ const register = async (req, res) => {
   }
 
   const hashPassword = await bcrypt.hash(password, 10);
+  const avatarURL = gravatar.url(email);
 
   const result = await User.create({
     ...req.body,
     password: hashPassword,
     subscription,
+    avatarURL,
   });
 
   res.status(201).json({
     email: result.email,
     subscription: result.subscription,
+    avatarURL: result.avatarURL,
   });
 };
 
-// signin
 const login = async (req, res) => {
   const { email, password } = req.body;
 
@@ -64,7 +71,6 @@ const login = async (req, res) => {
   });
 };
 
-// current user
 const getCurrent = async (req, res) => {
   const { subscription, email } = req.user;
 
@@ -74,7 +80,6 @@ const getCurrent = async (req, res) => {
   });
 };
 
-// logout
 const logout = async (req, res) => {
   const { _id } = req.user;
   await User.findByIdAndUpdate(_id, { token: "" });
@@ -98,10 +103,42 @@ const updateSubscription = async (req, res) => {
   res.json({ result });
 };
 
+const updateAvatar = async (req, res) => {
+  if (!req.file) {
+    throw HttpError(400, "Avatar must be provided");
+  }
+
+  const { _id } = req.user;
+  const { path: tempUpload, originalname } = req.file;
+
+  await Jimp.read(tempUpload)
+    .then((avatar) => {
+      return avatar.resize(250, 250).quality(60).write(tempUpload);
+    })
+    .catch((err) => {
+      throw err;
+    });
+
+  const fileName = `${_id}_${originalname}`;
+
+  const resultUpload = path.join(avatarDir, fileName);
+
+  await fs.rename(tempUpload, resultUpload);
+
+  const avatarURL = path.join("avatars", fileName);
+
+  await User.findByIdAndUpdate(_id, { avatarURL });
+
+  res.json({
+    avatarURL,
+  });
+};
+
 module.exports = {
   register: ctrlWrapper(register),
   login: ctrlWrapper(login),
   getCurrent: ctrlWrapper(getCurrent),
   logout: ctrlWrapper(logout),
   updateSubscription: ctrlWrapper(updateSubscription),
+  updateAvatar: ctrlWrapper(updateAvatar),
 };
